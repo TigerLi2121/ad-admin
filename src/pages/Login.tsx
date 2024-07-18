@@ -37,8 +37,8 @@ const Login: React.FC = () => {
   const handleSubmit = async (params: any) => {
     try {
       // 登录
-      const res = await request('/api/login', { method: 'POST', params });
-      if (res.code === 1) {
+      const res = await request('/api/login', { method: 'POST', data: params });
+      if (res.code === 0) {
         message.success('登录成功！');
         localStorage.setItem('xtoken', res.data?.token);
         await fetchUserInfo();

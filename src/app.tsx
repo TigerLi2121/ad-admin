@@ -9,7 +9,7 @@ import React from 'react';
 const isDev = process.env.NODE_ENV === 'development';
 const loginPath = '/login';
 import type { RequestOptions } from '@@/plugin-request/request';
-import { request as req } from '@umijs/max';
+import { request as fetch } from '@umijs/max';
 
 /**
  * @see  https://umijs.org/zh-CN/plugins/plugin-initial-state
@@ -22,7 +22,7 @@ export async function getInitialState(): Promise<{
 }> {
   const fetchUserInfo = async () => {
     try {
-      const res = await req('/api/user/current', { method: 'GET' });
+      const res = await fetch('/api/user/current', { method: 'GET' });
       return res.data;
     } catch (error) {
       history.push(loginPath);

@@ -58,8 +58,10 @@ const Table: React.FC = () => {
         <Popconfirm
           title="确定删除?"
           onConfirm={async () => {
-            await del([row.id]);
-            ref.current?.reset?.();
+            const res = await del([row.id]);
+            if (res) {
+              ref.current?.reset?.();
+            }
           }}
         >
           <a>删除</a>
@@ -166,8 +168,10 @@ const Table: React.FC = () => {
                 <Button
                   danger
                   onClick={async () => {
-                    await del(selectedRows.map((item: any) => item.id));
-                    ref.current?.reset?.();
+                    const res = await del(selectedRows.map((item: any) => item.id));
+                    if (res) {
+                      ref.current?.reset?.();
+                    }
                   }}
                 >
                   批量删除
@@ -221,7 +225,7 @@ const Table: React.FC = () => {
           initialValue={row?.password}
         />
 
-        {/* <ProFormCheckbox.Group
+        <ProFormCheckbox.Group
           name="role_ids"
           layout="horizontal"
           label="角色"
@@ -236,7 +240,7 @@ const Table: React.FC = () => {
             });
             return roleSelect;
           }}
-        /> */}
+        />
 
         <ProFormRadio.Group
           name="status"

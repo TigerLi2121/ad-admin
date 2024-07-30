@@ -1,5 +1,5 @@
 import { PlusOutlined } from '@ant-design/icons';
-import { Button, message, Space } from 'antd';
+import { Button, message, Space, Popconfirm } from 'antd';
 import React, { useState, useRef } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -10,44 +10,17 @@ import {
   ProFormCheckbox,
   ProTable,
 } from '@ant-design/pro-components';
-import { useAccess } from '@umijs/max';
-import { getRole } from '@/services/role';
-import { getUser, postUser, delUser } from '@/services/user';
-
-/**
- * 新增or修改
- *
- * @param fields
- */
-const headlePost = async (fields: API.User) => {
-  const hide = message.loading('正在保存');
-  try {
-    let res = await postUser({ ...fields });
-    hide();
-    if (res && res.code === 0) {
-      message.success('保存成功');
-      return true;
-    }
-    message.error(res.msg);
-    return false;
-  } catch (error) {
-    hide();
-    message.error('保存失败，请重试！');
-    return false;
-  }
-};
+import { useAccess, request } from '@umijs/max';
 
 /**
  * 删除
  *
- * @param selectedRows
+ * @param ids
  */
-const handleDel = async (selectedRows: API.User[]) => {
+const del = async (ids: any) => {
   const hide = message.loading('正在删除');
-  if (!selectedRows) return true;
-
   try {
-    let res = await delUser(selectedRows.map((record) => record.id));
+    let res = await request('/api/user', { method: 'DELETE', data: { ids } });
     hide();
     if (res && res.code === 0) {
       message.success('删除成功');
@@ -64,27 +37,38 @@ const handleDel = async (selectedRows: API.User[]) => {
 
 const Table: React.FC = () => {
   const access = useAccess();
-  const actionRef = useRef<ActionType>();
+  const ref = useRef<ActionType>();
 
   const [modalVisible, setModalVisible] = useState<boolean>(false);
-  const [currentRow, setCurrentRow] = useState<API.User>();
+  const [row, setRow] = useState<any>();
 
-  const optButton = (record: API.User, index: number) => (
+  const opt = (row: any, index: number) => (
     <Space key={index}>
       {access.UserUpdate && (
         <a
           onClick={() => {
             setModalVisible(true);
-            setCurrentRow(record);
+            setRow(row);
           }}
         >
           修改
         </a>
       )}
+      {access.UserDelete && (
+        <Popconfirm
+          title="确定删除?"
+          onConfirm={async () => {
+            await del([row.id]);
+            ref.current?.reset?.();
+          }}
+        >
+          <a>删除</a>
+        </Popconfirm>
+      )}
     </Space>
   );
 
-  const columns: ProColumns<API.User>[] = [
+  const columns: ProColumns[] = [
     {
       title: 'ID',
       dataIndex: 'id',
@@ -93,7 +77,7 @@ const Table: React.FC = () => {
         return (
           <a
             onClick={() => {
-              setCurrentRow(entity);
+              setRow(entity);
             }}
           >
             {' '}
@@ -114,22 +98,32 @@ const Table: React.FC = () => {
         1: { text: '正常', status: 'Success' },
       },
     },
-    { title: '创建时间', sorter: true, dataIndex: 'created_at', hideInSearch: true },
-    { title: '修改时间', sorter: true, dataIndex: 'updated_at', hideInSearch: true },
+    {
+      title: '创建时间',
+      sorter: true,
+      dataIndex: 'created_at',
+      hideInSearch: true,
+    },
+    {
+      title: '修改时间',
+      sorter: true,
+      dataIndex: 'updated_at',
+      hideInSearch: true,
+    },
     {
       title: '操作',
       dataIndex: 'option',
       valueType: 'option',
-      render: (_, record, index) => [optButton(record, index)],
+      render: (_, row, index) => [opt(row, index)],
     },
   ];
 
   return (
     <>
       <PageContainer>
-        <ProTable<API.User>
+        <ProTable
           headerTitle="用户列表"
-          actionRef={actionRef}
+          actionRef={ref}
           rowKey="id"
           search={{
             labelWidth: 120,
@@ -141,14 +135,19 @@ const Table: React.FC = () => {
                 key="primary"
                 onClick={() => {
                   setModalVisible(true);
-                  setCurrentRow(undefined);
+                  setRow({});
                 }}
               >
                 <PlusOutlined /> 新增
               </Button>
             ),
           ]}
-          request={getUser}
+          request={async (req) =>
+            await request('/api/user', {
+              method: 'GET',
+              params: { page: req.current, limit: req.pageSize, ...req },
+            })
+          }
           columns={columns}
           rowSelection={{}}
           tableAlertRender={({ selectedRowKeys, onCleanSelected }) => (
@@ -167,8 +166,8 @@ const Table: React.FC = () => {
                 <Button
                   danger
                   onClick={async () => {
-                    await handleDel(selectedRows);
-                    actionRef.current?.reloadAndRest?.();
+                    await del(selectedRows.map((item: any) => item.id));
+                    ref.current?.reset?.();
                   }}
                 >
                   批量删除
@@ -179,25 +178,30 @@ const Table: React.FC = () => {
         />
       </PageContainer>
 
-      <ModalForm<API.User>
-        title={currentRow?.id ? '修改' : '新增'}
+      <ModalForm
+        title={row?.id ? '修改' : '新增'}
         layout="horizontal"
         width="500px"
         labelCol={{ span: 4 }}
         wrapperCol={{ span: 18 }}
         open={modalVisible}
         onOpenChange={setModalVisible}
-        onFinish={async (value) => {
-          if (currentRow) {
-            value = { ...currentRow, ...value, created_at: undefined, updated_at: undefined };
-          }
-          const success = await headlePost(value);
-          if (success) {
-            setModalVisible(false);
-            setCurrentRow({} as any);
-            if (actionRef.current) {
-              actionRef.current.reload();
+        onFinish={async (params) => {
+          params = { ...params, id: row?.id };
+          const hide = message.loading('正在保存');
+          try {
+            const res = await request('/api/user', { method: 'POST', data: params });
+            hide();
+            if (res && res.code === 0) {
+              message.success('保存成功');
+              setModalVisible(false);
+              ref.current?.reset?.();
+            } else {
+              message.error(res.msg);
             }
+          } catch (error) {
+            hide();
+            message.error('保存失败，请重试');
           }
         }}
         modalProps={{ destroyOnClose: true }}
@@ -207,31 +211,32 @@ const Table: React.FC = () => {
           width="md"
           name="username"
           label="用户名"
-          initialValue={currentRow?.username}
-          fieldProps={{ id: '1_username' }}
+          initialValue={row?.username}
         />
         <ProFormText.Password
           width="md"
           name="password"
           label="密码"
           placeholder="密码(不修改密码可以不填)"
-          initialValue={currentRow?.password}
-          fieldProps={{ id: '1_password' }}
+          initialValue={row?.password}
         />
 
-        <ProFormCheckbox.Group
+        {/* <ProFormCheckbox.Group
           name="role_ids"
           layout="horizontal"
           label="角色"
-          initialValue={currentRow?.role_ids}
+          initialValue={row?.role_ids}
           request={async () => {
-            let res = await getRole({});
-            let roleSelect = res.data.map((item: API.Role) => {
+            let res = await request('/api/role', {
+              method: 'GET',
+              params: { page: 1, limit: 1000 },
+            });
+            let roleSelect = res.data.map((item: any) => {
               return { label: item.name, value: item.id };
             });
             return roleSelect;
           }}
-        />
+        /> */}
 
         <ProFormRadio.Group
           name="status"
@@ -241,8 +246,7 @@ const Table: React.FC = () => {
             { value: 1, label: '正常' },
             { value: 0, label: '禁用' },
           ]}
-          initialValue={currentRow ? currentRow?.status : 1}
-          fieldProps={{ id: '1_status' }}
+          initialValue={row ? row?.status : 1}
         />
       </ModalForm>
     </>
